@@ -95,7 +95,8 @@ def get_history():
 								ydl_opts['outtmpl'] = '%s/%s/%s.%s' % (main_folder, foldername, '%(title)s', '%(ext)s')
 								with youtube_dl.YoutubeDL(ydl_opts) as ydl:
 									ydl.download([trailers[0].geturl()])
-					elif has_trailer(foldername):
+					elif item['movie']['hasFile'] == True and has_trailer(foldername):
+						logger.info("Deleting %s" % (foldername))
 						shutil.rmtree(main_folder+'/'+foldername)
 
 try:
