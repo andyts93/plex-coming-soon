@@ -7,6 +7,7 @@ from tmdb3 import set_key, set_locale, Movie
 import youtube_dl
 import re
 import unicodedata
+import shutil
 
 set_key('bee608b6e6519d689c39001fb805090a')
 set_locale('it', 'it')
@@ -35,6 +36,14 @@ def get_trailers(imdb_id, retry):
 			set_locale('it', 'it')
 			return trailers
 
+def has_trailer(foldername):
+	return os.path.exists("/mnt/hd/trailers/"+foldername)
+
+def purge_dir(dir):
+	dir = "/mnt/hd/trailers/"+dir
+	for f in os.listdir(dir):
+		os.remove(os.path.join(dir, f))
+
 def get_history():
 	url = "http://192.168.0.20:7878/api/history?page=1&pageSize=10&apikey=326cc12ace3c496791d11f8630ca60f3"
 	response = requests.get(url).json()
@@ -43,31 +52,29 @@ def get_history():
 	if response['totalRecords'] == 0:
 		print "No entry in radarr history"
 	else:
-		grabbed = [x for x in response['records'] if x['eventType'] == 'grabbed' and x['movie']['hasFile'] == False]
+		grabbed = [x for x in response['records'] if x['eventType'] == 'grabbed']
 		if not grabbed:
-			print "No coming soon titles"
+			print "No coming soon movies"
 		else:
 			for item in grabbed:
-				if 'movie' in item and 'tmdbId' in item['movie']:
-					trailers = get_trailers(item['movie']['tmdbId'], True)
-					if trailers:
-						foldername = "%s (%d)" % (item['movie']['title'], item['movie']['year'])
-						ydl_opts['outtmpl'] = '/mnt/hd/trailers/%s/%s.%s' % (foldername, '%(title)s', '%(ext)s')
-						with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-							ydl.download([trailers[0].geturl()])
-						
+				if 'movie' in item:
+					foldername = "%s (%d)" % (item['movie']['title'], item['movie']['year'])
+					if 'tmdbId' in item['movie'] and item['movie']['hasFile'] == False:
+						if not has_trailer(foldername):
+							trailers = get_trailers(item['movie']['tmdbId'], True)
+							if trailers:
+								ydl_opts['outtmpl'] = '/mnt/hd/trailers/%s/%s.%s' % (foldername, '%(title)s', '%(ext)s')
+								with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+									ydl.download([trailers[0].geturl()])
+					elif has_trailer(foldername):
+						shutil.rmtree("/mnt/hd/trailers/"+foldername)
 
 try:
 	get_history()
 except Exception as e:
 	print(e);
 
-# def parseRSS(rss_url):
-# 	return feedparser.parse(rss_url)
 
-# def purge_dir(dir):
-# 	for f in os.listdir(dir):
-# 		os.remove(os.path.join(dir, f))
 
 		
 
