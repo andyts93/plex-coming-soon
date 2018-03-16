@@ -11,10 +11,13 @@ def get_history():
 	if 'error' in response:
 		raise Exception(response['error'])
 	if response['totalRecords'] == 0:
-		print("No entry in radarr history")
+		print "No entry in radarr history"
 	else:
-		grabbed = [x for x in response['records'] if x['eventType'] == 'grabbed']
-		print grabbed
+		grabbed = [x for x in response['records'] if x['eventType'] == 'grabbed' and x['movie']['hasFile'] == False]
+		if not grabbed:
+			print "No coming soon titles"
+		else:
+			print grabbed
 
 try:
 	get_history()
