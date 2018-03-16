@@ -98,10 +98,7 @@ def get_history():
 					elif has_trailer(foldername):
 						shutil.rmtree(main_folder+'/'+foldername)
 
-""" try:
+try:
 	get_history()
 except Exception as e:
-	logger.error(e) """
-
-for _ in range(500):
-	get_trailers(11,True)
+	logger.error(e)
