@@ -3,58 +3,87 @@ import requests
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.dirname(__file__)) + '/lib')
-from tmdb3 import set_key, set_locale, Movie
+from tmdb3 import set_key, set_locale, Movie, set_cache
 import youtube_dl
 import re
 import unicodedata
 import shutil
+import logging
+from ConfigParser import SafeConfigParser
+import time
 
-set_key('bee608b6e6519d689c39001fb805090a')
-set_locale('it', 'it')
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.FileHandler('logs/plex-coming-soon.log')
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
-def my_hook(d):
+parser = SafeConfigParser()
+found = parser.read('config.ini')
+if not found:
+	logger.critical("Configuration file not found, check your config.ini file")
+	exit()
+
+main_folder = parser.get('DEFAULT', 'trailer_folder')
+
+try:
+	set_key(parser.get('DEFAULT', 'tmdb_api_key'))
+except Exception as e:
+	logger.critical(e)
+	exit()
+
+set_locale(parser.get('DEFAULT', 'language'), parser.get('DEFAULT', 'country'))
+set_cache('null')
+
+def yt_hook(d):
 	if d['status'] == 'finished':
-		print "Download completato"
-
+		logger.info('File downloaded in %s' % (d['filename']))
+ 
 ydl_opts = {
 	'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4',
-	'progress_hooks': [my_hook],
 	'ignoreerrors': True,
 	'no_warnings': True,
-	'quiet': True
+	'logger': logger,
+	'verbose': False,
+	'progress_hooks': [yt_hook],
 }
 
-def get_trailers(imdb_id, retry):
-	movie = Movie(imdb_id)
-	if movie:
-		trailers = movie.youtube_trailers
-		if not trailers and retry == True:
-			# try to get english trailer
-			set_locale('en', 'gb')
-			return get_trailers(imdb_id, False)
-		else:
-			set_locale('it', 'it')
-			return trailers
+def get_trailers(tmdbId, retry):
+	try:
+		logger.debug("Searching for movie with id %d" % (tmdbId))
+		movie = Movie(tmdbId)
+		if movie:
+			trailers = movie.youtube_trailers
+			if not trailers and retry == True:
+				# try to get english trailer
+				set_locale('en', 'gb')
+				return get_trailers(tmdbId, False)
+			else:
+				set_locale(parser.get('DEFAULT', 'language'), parser.get('DEFAULT', 'country'))
+				return trailers
+	except Exception as e:
+		if str(e) == '25':
+			logger.info("API limit reached, sleep for 10 seconds")
+			time.sleep(10)
+			return get_trailers(tmdbId, retry)
+
 
 def has_trailer(foldername):
-	return os.path.exists("/mnt/hd/trailers/"+foldername)
-
-def purge_dir(dir):
-	dir = "/mnt/hd/trailers/"+dir
-	for f in os.listdir(dir):
-		os.remove(os.path.join(dir, f))
+	return os.path.exists(main_folder+'/'+foldername)
 
 def get_history():
-	url = "http://192.168.0.20:7878/api/history?page=1&pageSize=10&apikey=326cc12ace3c496791d11f8630ca60f3"
+	url = "http://192.168.0.20:7878/api/history?page=1&pageSize=100&apikey="+parser.get('DEFAULT', 'radarr_api_key')
 	response = requests.get(url).json()
 	if 'error' in response:
 		raise Exception(response['error'])
 	if response['totalRecords'] == 0:
-		print "No entry in radarr history"
+		logger.info("No entry in radarr history")
 	else:
 		grabbed = [x for x in response['records'] if x['eventType'] == 'grabbed']
 		if not grabbed:
-			print "No coming soon movies"
+			logger.info("No coming soon movies")
 		else:
 			for item in grabbed:
 				if 'movie' in item:
@@ -63,18 +92,16 @@ def get_history():
 						if not has_trailer(foldername):
 							trailers = get_trailers(item['movie']['tmdbId'], True)
 							if trailers:
-								ydl_opts['outtmpl'] = '/mnt/hd/trailers/%s/%s.%s' % (foldername, '%(title)s', '%(ext)s')
+								ydl_opts['outtmpl'] = '%s/%s/%s.%s' % (main_folder, foldername, '%(title)s', '%(ext)s')
 								with youtube_dl.YoutubeDL(ydl_opts) as ydl:
 									ydl.download([trailers[0].geturl()])
 					elif has_trailer(foldername):
-						shutil.rmtree("/mnt/hd/trailers/"+foldername)
+						shutil.rmtree(main_folder+'/'+foldername)
 
-try:
+""" try:
 	get_history()
 except Exception as e:
-	print(e);
+	logger.error(e) """
 
-
-
-		
-
+for _ in range(500):
+	get_trailers(11,True)
