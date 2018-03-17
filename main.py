@@ -8,39 +8,33 @@ import youtube_dl
 import re
 import unicodedata
 import shutil
-import logging
 from ConfigParser import SafeConfigParser
 import time
+from logger import debug, info, warning, error, critical, logger
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-handler = logging.FileHandler('logs/plex-coming-soon.log')
-handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s: %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-
+# get config file
 parser = SafeConfigParser()
-found = parser.read('config.ini')
+found = parser.read(os.path.dirname(__file__)+'/config.ini')
 if not found:
-	logger.critical("Configuration file not found, check your config.ini file")
+	critical("Configuration file not found, check your config.ini file")
 	exit()
 
 main_folder = parser.get('DEFAULT', 'trailer_folder')
 
+# set tmdb api key
 try:
 	set_key(parser.get('DEFAULT', 'tmdb_api_key'))
 except Exception as e:
-	logger.critical(e)
+	critical(e)
 	exit()
 
 set_locale(parser.get('DEFAULT', 'language'), parser.get('DEFAULT', 'country'))
-set_cache('null')
 
 def yt_hook(d):
 	if d['status'] == 'finished':
-		logger.info('File downloaded in %s' % (d['filename']))
- 
+		info('File downloaded in %s' % (d['filename']))
+
+# youtube-dl options
 ydl_opts = {
 	'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4',
 	'ignoreerrors': True,
@@ -48,11 +42,12 @@ ydl_opts = {
 	'logger': logger,
 	'verbose': False,
 	'progress_hooks': [yt_hook],
+	"simulate": True
 }
 
 def get_trailers(tmdbId, retry):
 	try:
-		logger.debug("Searching for movie with id %d" % (tmdbId))
+		debug("Searching for movie with id %d" % (tmdbId))
 		movie = Movie(tmdbId)
 		if movie:
 			trailers = movie.youtube_trailers
@@ -65,7 +60,7 @@ def get_trailers(tmdbId, retry):
 				return trailers
 	except Exception as e:
 		if str(e) == '25':
-			logger.info("API limit reached, sleep for 10 seconds")
+			info("API limit reached, sleep for 10 seconds")
 			time.sleep(10)
 			return get_trailers(tmdbId, retry)
 
@@ -79,11 +74,11 @@ def get_history():
 	if 'error' in response:
 		raise Exception(response['error'])
 	if response['totalRecords'] == 0:
-		logger.info("No entry in radarr history")
+		info("No entry in radarr history")
 	else:
 		grabbed = [x for x in response['records'] if x['eventType'] == 'grabbed']
 		if not grabbed:
-			logger.info("No coming soon movies")
+			info("No coming soon movies")
 		else:
 			for item in grabbed:
 				if 'movie' in item:
@@ -96,10 +91,10 @@ def get_history():
 								with youtube_dl.YoutubeDL(ydl_opts) as ydl:
 									ydl.download([trailers[0].geturl()])
 					elif item['movie']['hasFile'] == True and has_trailer(foldername):
-						logger.info("Deleting %s" % (foldername))
+						info("Deleting %s" % (foldername))
 						shutil.rmtree(main_folder+'/'+foldername)
 
 try:
 	get_history()
 except Exception as e:
-	logger.error(e)
+	error(e)
