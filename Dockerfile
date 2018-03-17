@@ -1,9 +1,16 @@
-FROM python:2
-WORKDIR /usr/src/app
+FROM alpine:3.1
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Update
+RUN apk add --update python py-pip
 
-COPY . .
+# Install dependecies
+RUN pip install requests youtube-dl schedule
 
-CMD [ "python", "./main.py" ]
+WORKDIR /usr/src/plex-coming-soon
+RUN mkdir logs
+
+COPY config.sample.ini ./lib logger.py main.py plexcomingsoon.py run.sh ./
+
+VOLUME /trailers
+
+ENV TMDB_API=""
