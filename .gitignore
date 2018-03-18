@@ -101,3 +101,4 @@ ENV/
 
 logs/
 config.ini
+run.sh
