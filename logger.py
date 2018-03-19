@@ -15,7 +15,7 @@ sh.setFormatter(formatter)
 
 # set up logging to a file for all levels DEBUG and higher
 fh = logging.FileHandler(LOG_FILE_NAME)
-fh.setLevel(logging.DEBUG)
+fh.setLevel(logging.INFO)
 fh.setFormatter(formatter)
 
 # create logger object

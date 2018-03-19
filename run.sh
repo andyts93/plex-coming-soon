@@ -8,4 +8,4 @@ echo "country = ${COUNTRY}" >> config.ini
 echo "trailer_folder = /trailers" >> config.ini
 echo "interval = ${INTERVAL}" >> config.ini
 
-python main.py &
+python main.py 

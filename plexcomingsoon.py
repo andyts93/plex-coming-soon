@@ -17,8 +17,9 @@ class PlexComingSoon():
 	def __init__(self):
 		self.parser = SafeConfigParser()
 		self.get_config()
-		# set locale
+		# set tmdb info
 		set_locale(self.language, self.country)
+		set_key(self.tmdb_api_key)
 		# youtube-dl options
 		self.ydl_opts = {
 			'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4',
@@ -27,7 +28,7 @@ class PlexComingSoon():
 			'logger': logger,
 			'verbose': False,
 			'progress_hooks': [self.yt_hook],
-			"simulate": True
+			# "simulate": True
 		}
 	
 	def check_config(self, option):
@@ -71,11 +72,14 @@ class PlexComingSoon():
 				trailers = movie.youtube_trailers
 				if not trailers and retry == True:
 					# try to get english trailer
+					debug("Trying to get english trailer")
 					set_locale('en', 'gb')
 					return self.get_trailers(tmdbId, False)
 				else:
 					set_locale(self.language, self.country)
 					return trailers
+			else:
+				error("No movie found with id %d" % (tmdbId))
 		except Exception as e:
 			if str(e) == '25':
 				info("API limit reached, sleep for 10 seconds")
@@ -86,7 +90,6 @@ class PlexComingSoon():
 		return os.path.exists(self.trailer_folder+'/'+foldername)
 	
 	def get_history(self):
-		# url = "http://192.168.0.20:7878/api/history?page=1&pageSize=100&apikey="+self.radarr_api_key
 		url = "%s/api/history?page=1&pageSize=100&apikey=%s" % (self.radarr_url, self.radarr_api_key)
 		response = requests.get(url).json()
 		if 'error' in response:
@@ -106,7 +109,7 @@ class PlexComingSoon():
 								trailers = self.get_trailers(item['movie']['tmdbId'], True)
 								if trailers:
 									self.ydl_opts['outtmpl'] = '%s/%s/%s.%s' % (self.trailer_folder, foldername, '%(title)s', '%(ext)s')
-									with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+									with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
 										ydl.download([trailers[0].geturl()])
 						elif item['movie']['hasFile'] == True and self.has_trailer(foldername):
 							info("Deleting %s" % (foldername))
