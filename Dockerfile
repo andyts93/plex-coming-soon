@@ -7,10 +7,13 @@ RUN apk add --update python py-pip ca-certificates
 RUN pip install requests youtube-dl schedule
 
 WORKDIR /usr/src/plex-coming-soon
+# Create log folder
 RUN mkdir logs
 
 COPY ./lib logger.py main.py plexcomingsoon.py run.sh ./
 RUN chmod 755 run.sh
+
+# map logs to stdout
 RUN ln -sf /dev/stdout /usr/src/plex-coming-soon/logs/log.log
 
 VOLUME /trailers
