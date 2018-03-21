@@ -11,6 +11,7 @@ import shutil
 from ConfigParser import SafeConfigParser
 import time
 from logger import debug, info, warning, error, critical, logger
+from urllib import urlencode
 
 class PlexComingSoon():
 	
@@ -30,6 +31,7 @@ class PlexComingSoon():
 			'progress_hooks': [self.yt_hook],
 			# "simulate": True
 		}
+		self.coming_soon_movies = [str('.placeholder')]
 	
 	def check_config(self, option):
 		try:
@@ -63,7 +65,28 @@ class PlexComingSoon():
 	def yt_hook(self, d):
 		if d['status'] == 'finished':
 			info('File downloaded in %s' % (d['filename']))
-	
+
+	def radarr_request(self, endpoint, params):
+		params['apikey'] = self.radarr_api_key
+		url = "%s/api/%s?%s" % (self.radarr_url, endpoint, urlencode(params))
+		try:
+			r = requests.get(url)
+			r.raise_for_status()
+		except requests.exceptions.Timeout:
+			error("Request timeout")
+			sys.exit(1)
+		except requests.exceptions.TooManyRedirects:
+			error("Radarr URL is wrong, check your config")
+			sys.exit(1)
+		except requests.exceptions.RequestException as e:
+			error(str(e))
+			sys.exit(1)
+		except requests.exceptions.HTTPError as e:
+			error(str(e))
+			sys.exit(1)
+		
+		return r.json()
+
 	def get_trailers(self, tmdbId, retry):
 		try:
 			debug("Searching for movie with id %d" % (tmdbId))
@@ -90,8 +113,8 @@ class PlexComingSoon():
 		return os.path.exists(self.trailer_folder+'/'+foldername)
 	
 	def get_history(self):
-		url = "%s/api/history?page=1&pageSize=100&apikey=%s" % (self.radarr_url, self.radarr_api_key)
-		response = requests.get(url).json()
+		params = dict([('page', 1), ('pageSize', 100)])
+		response = self.radarr_request('history', params)
 		if 'error' in response:
 			raise Exception(response['error'])
 		if response['totalRecords'] == 0:
@@ -103,21 +126,42 @@ class PlexComingSoon():
 			else:
 				for item in grabbed:
 					if 'movie' in item:
-						foldername = "%s (%d)" % (item['movie']['title'], item['movie']['year'])
-						if 'tmdbId' in item['movie'] and item['movie']['hasFile'] == False:
-							if not self.has_trailer(foldername):
-								trailers = self.get_trailers(item['movie']['tmdbId'], True)
-								if trailers:
-									self.ydl_opts['outtmpl'] = '%s/%s/%s.%s' % (self.trailer_folder, foldername, '%(title)s', '%(ext)s')
-									with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
-										ydl.download([trailers[0].geturl()])
-						elif item['movie']['hasFile'] == True and self.has_trailer(foldername):
-							info("Deleting %s" % (foldername))
-							shutil.rmtree(self.trailer_folder+'/'+foldername)
+						self.process(item['movie'])
+	
+	def get_movies(self):
+		response = self.radarr_request('movie', dict([]))
+		if 'error' in response:
+			raise Exception(response['error'])
+		if not response:
+			info("No movies found")
+		else:
+			missing = [x for x in response if x['status'] == 'released' and x['monitored'] == True]
+			for item in missing:
+				self.process(item)
+
+	def process(self, item):
+		foldername = "%s (%d)" % (item['title'], item['year'])
+		if 'tmdbId' in item and item['hasFile'] == False:
+			self.coming_soon_movies.append(foldername.encode('utf-8'))
+			if not self.has_trailer(foldername):
+				trailers = self.get_trailers(item['tmdbId'], True)
+				if trailers:
+					self.ydl_opts['outtmpl'] = '%s/%s/%s.%s' % (self.trailer_folder, foldername, '%(title)s', '%(ext)s')
+					with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
+								ydl.download([trailers[0].geturl()])
+
+	def cleanup(self):
+		for x in os.listdir(self.trailer_folder):
+			if x not in self.coming_soon_movies:
+				path = os.path.join(self.trailer_folder, x.decode('utf-8'))
+				info("Deleting %s" % (path))
+				shutil.rmtree(path)
 		
 	def run(self):
 		info("Starting search")
 		try:
 			self.get_history()
+			#self.get_movies()
 		except Exception as e:
 			error(e)
+		self.cleanup()
