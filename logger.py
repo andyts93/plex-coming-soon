@@ -10,7 +10,7 @@ formatter = logging.Formatter('[%(asctime)s] %(levelname)s (%(process)d) %(modul
 
 # set up logging to STDOUT for all levels WARNING and higher
 sh = logging.StreamHandler(sys.stdout)
-sh.setLevel(logging.DEBUG)
+sh.setLevel(logging.WARNING)
 sh.setFormatter(formatter)
 
 # set up logging to a file for all levels DEBUG and higher
