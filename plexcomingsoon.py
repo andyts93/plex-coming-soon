@@ -2,8 +2,6 @@ from __future__ import unicode_literals
 import requests
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.dirname(__file__)) + '/lib')
-from tmdb3 import set_key, set_locale, Movie, set_cache
 import youtube_dl
 import re
 import unicodedata
@@ -18,9 +16,6 @@ class PlexComingSoon():
 	def __init__(self):
 		self.parser = SafeConfigParser()
 		self.get_config()
-		# set tmdb info
-		set_locale(self.language, self.country)
-		set_key(self.tmdb_api_key)
 		# youtube-dl options
 		self.ydl_opts = {
 			'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4',
@@ -55,10 +50,7 @@ class PlexComingSoon():
 		
 		# get configs
 		self.radarr_url = self.check_config('radarr_url')
-		self.tmdb_api_key = self.check_config('tmdb_api_key')
 		self.radarr_api_key = self.check_config('radarr_api_key')
-		self.language = self.check_config('language')
-		self.country = self.check_config('country')
 		self.trailer_folder = self.check_config('trailer_folder')
 		self.interval = int(self.check_config('interval'))
 	
@@ -86,28 +78,6 @@ class PlexComingSoon():
 			sys.exit(1)
 		
 		return r.json()
-
-	def get_trailers(self, tmdbId, retry):
-		try:
-			debug("Searching for movie with id %d" % (tmdbId))
-			movie = Movie(tmdbId)
-			if movie:
-				trailers = movie.youtube_trailers
-				if not trailers and retry == True:
-					# try to get english trailer
-					debug("Trying to get english trailer")
-					set_locale('en', 'gb')
-					return self.get_trailers(tmdbId, False)
-				else:
-					set_locale(self.language, self.country)
-					return trailers
-			else:
-				error("No movie found with id %d" % (tmdbId))
-		except Exception as e:
-			if str(e) == '25':
-				info("API limit reached, sleep for 10 seconds")
-				time.sleep(10)
-				return self.get_trailers(tmdbId, retry)
 	
 	def has_trailer(self, foldername):
 		return os.path.exists(self.trailer_folder+'/'+foldername)
@@ -144,11 +114,11 @@ class PlexComingSoon():
 		if 'tmdbId' in item and item['hasFile'] == False:
 			self.coming_soon_movies.append(foldername.encode('utf-8'))
 			if not self.has_trailer(foldername):
-				trailers = self.get_trailers(item['tmdbId'], True)
-				if trailers:
-					self.ydl_opts['outtmpl'] = '%s/%s/%s.%s' % (self.trailer_folder, foldername, '%(title)s', '%(ext)s')
+				self.ydl_opts['outtmpl'] = '%s/%s/%s.%s' % (self.trailer_folder, foldername, '%(title)s', '%(ext)s')
+				if 'youTubeTrailerId' in item:
+					trailer = "https://youtube.com/watch?v=%s" % (item['youTubeTrailerId'])
 					with youtube_dl.YoutubeDL(self.ydl_opts) as ydl:
-								ydl.download([trailers[0].geturl()])
+						ydl.download([trailer])
 
 	def cleanup(self):
 		for x in os.listdir(self.trailer_folder):
@@ -160,8 +130,8 @@ class PlexComingSoon():
 	def run(self):
 		info("Starting search")
 		try:
-			self.get_history()
-			#self.get_movies()
+			#self.get_history()
+			self.get_movies()
 		except Exception as e:
 			error(e)
 		self.cleanup()
