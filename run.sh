@@ -8,4 +8,4 @@ echo "interval = ${INTERVAL}" >> config.ini
 # create an empty hidden file so Plex will delete all trailers from library if the folder is empty
 touch /trailers/.placeholder
 # launch app
-python main.py
+python3 main.py
