@@ -6,10 +6,10 @@ import youtube_dl
 import re
 import unicodedata
 import shutil
-from ConfigParser import SafeConfigParser
+from configparser import SafeConfigParser
 import time
 from logger import debug, info, warning, error, critical, logger
-from urllib import urlencode
+from urllib.parse import urlencode
 
 class PlexComingSoon():
 	
@@ -27,6 +27,7 @@ class PlexComingSoon():
 			# "simulate": True
 		}
 		self.coming_soon_movies = [str('.placeholder')]
+		self.minimumAvailabilityWeigth = ['announced', 'inCinemas', 'released', 'preDB']
 	
 	def check_config(self, option):
 		try:
@@ -105,13 +106,13 @@ class PlexComingSoon():
 		if not response:
 			info("No movies found")
 		else:
-			missing = [x for x in response if x['status'] == 'released' and x['monitored'] == True]
+			missing = [x for x in response if self.minimumAvailabilityWeigth.index(x['status']) >= self.minimumAvailabilityWeigth.index(x['minimumAvailability']) and x['monitored'] == True]
 			for item in missing:
 				self.process(item)
 
 	def process(self, item):
 		foldername = "%s (%d)" % (item['title'], item['year'])
-		if 'tmdbId' in item and item['hasFile'] == False:
+		if item['hasFile'] == False:
 			self.coming_soon_movies.append(foldername.encode('utf-8'))
 			if not self.has_trailer(foldername):
 				self.ydl_opts['outtmpl'] = '%s/%s/%s.%s' % (self.trailer_folder, foldername, '%(title)s', '%(ext)s')
@@ -123,7 +124,7 @@ class PlexComingSoon():
 	def cleanup(self):
 		for x in os.listdir(self.trailer_folder):
 			if x not in self.coming_soon_movies:
-				path = os.path.join(self.trailer_folder, x.decode('utf-8'))
+				path = os.path.join(self.trailer_folder, x)
 				info("Deleting %s" % (path))
 				shutil.rmtree(path)
 		
@@ -134,4 +135,4 @@ class PlexComingSoon():
 			self.get_movies()
 		except Exception as e:
 			error(e)
-		self.cleanup()
+		#self.cleanup()
