@@ -10,8 +10,6 @@ docker create \
 -e RADARR_URL="<radarr url>" \
 -e TMDB_API="<tmdb api key>" \
 -e RADARR_API="<radarr api key>" \
--e LANG="<language tag>" \
--e COUNTRY="<country tag>" \
 -e INTERVAL="<interval>" \
 -v <path/to/trailers/folder>:/trailers \
 andyts93/plex-coming-soon
